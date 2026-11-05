@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.core.database import init_db
@@ -35,6 +36,7 @@ def test_login_invalid_credentials():
     assert response.status_code == 401
 
 def test_tenant_creation_and_isolation():
+    uid = uuid.uuid4().hex[:6]
     # 1. Login as Super Admin
     login_res = client.post("/api/v1/auth/login", json={
         "email": "admin@hrservices.com",
@@ -45,8 +47,8 @@ def test_tenant_creation_and_isolation():
 
     # 2. Create Tenant A
     res_a = client.post("/api/v1/tenants", json={
-        "name": "Alpha Corp",
-        "slug": "alpha-corp",
+        "name": f"Alpha Corp {uid}",
+        "slug": f"alpha-corp-{uid}",
         "primary_color": "#10b981",
         "currency": "GBP"
     }, headers=headers)
@@ -55,9 +57,9 @@ def test_tenant_creation_and_isolation():
 
     # 3. Create Tenant B via Provisioning
     prov_res = client.post("/api/v1/provisioning/provision", json={
-        "client_name": "Beta Logistics",
-        "client_slug": "beta-logistics",
-        "admin_email": "admin@betalogistics.com",
+        "client_name": f"Beta Logistics {uid}",
+        "client_slug": f"beta-logistics-{uid}",
+        "admin_email": f"admin-{uid}@betalogistics.com",
         "admin_name": "Marcus Vance",
         "admin_password": "BetaSecure2026!"
     }, headers=headers)
@@ -66,7 +68,7 @@ def test_tenant_creation_and_isolation():
 
     # 4. Login as Tenant B User
     user_b_res = client.post("/api/v1/auth/login", json={
-        "email": "admin@betalogistics.com",
+        "email": f"admin-{uid}@betalogistics.com",
         "password": "BetaSecure2026!"
     })
     assert user_b_res.status_code == 200
@@ -82,4 +84,4 @@ def test_tenant_creation_and_isolation():
     # 6. Tenant B user accessing own tenant
     authorized_res = client.get(f"/api/v1/tenants/{tenant_b_id}/verify-isolation", headers=headers_b)
     assert authorized_res.status_code == 200
-    assert authorized_res.json()["tenant"]["slug"] == "beta-logistics"
+    assert authorized_res.json()["tenant"]["slug"] == f"beta-logistics-{uid}"
